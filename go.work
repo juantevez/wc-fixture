@@ -2,5 +2,8 @@ go 1.25
 
 use (
 	./contexts/fixture-core
+	./contexts/result-ingestion
+	./contexts/team-registry
+	./contexts/venue-geo
 	./shared
 )

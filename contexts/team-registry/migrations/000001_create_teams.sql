@@ -16,10 +16,12 @@ CREATE TABLE IF NOT EXISTS teams (
     created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
-    CONSTRAINT teams_pkey       PRIMARY KEY (id),
-    CONSTRAINT teams_short_name UNIQUE (UPPER(short_name)),
-    CONSTRAINT teams_country    UNIQUE (country_code)
+    CONSTRAINT teams_pkey    PRIMARY KEY (id),
+    CONSTRAINT teams_country UNIQUE (country_code)
 );
+
+-- UNIQUE case-insensitive en short_name — requiere índice funcional (no constraint inline)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_teams_short_name_upper ON teams (UPPER(short_name));
 
 CREATE OR REPLACE FUNCTION set_updated_at()
 RETURNS TRIGGER AS $$

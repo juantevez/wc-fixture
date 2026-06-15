@@ -1,37 +1,42 @@
+# =============================================================================
+# Dockerfile — fixture-core
+# Build context: raíz del monorepo (wc-fixture/)
+# =============================================================================
+
 # ── Stage 1: build ────────────────────────────────────────────────────────────
 FROM golang:1.25-alpine AS builder
 
-# Dependencias del sistema para cgo (pgx lo requiere en algunos casos)
 RUN apk add --no-cache git ca-certificates tzdata
 
 WORKDIR /src
 
-# Copiar go.mod del módulo shared primero para aprovechar cache de capas
-COPY shared/go.mod shared/go.sum ./shared/
-COPY contexts/fixture-core/go.mod contexts/fixture-core/go.sum ./contexts/fixture-core/
+COPY go.work go.work.sum ./
+COPY shared/go.mod shared/go.sum                                     ./shared/
+COPY contexts/fixture-core/go.mod contexts/fixture-core/go.sum       ./contexts/fixture-core/
+COPY contexts/venue-geo/go.mod contexts/venue-geo/go.sum             ./contexts/venue-geo/
+COPY contexts/team-registry/go.mod contexts/team-registry/go.sum     ./contexts/team-registry/
+COPY contexts/result-ingestion/go.mod contexts/result-ingestion/go.sum ./contexts/result-ingestion/
+COPY contexts/notification/go.mod contexts/notification/go.sum       ./contexts/notification/
 
-# Descargar dependencias — cacheado si go.mod no cambió
-WORKDIR /src/contexts/fixture-core
-RUN go mod download
+RUN go work sync
 
-# Copiar código fuente
-WORKDIR /src
-COPY shared/ ./shared/
-COPY contexts/fixture-core/ ./contexts/fixture-core/
+COPY shared/                    ./shared/
+COPY contexts/fixture-core/     ./contexts/fixture-core/
+COPY contexts/venue-geo/        ./contexts/venue-geo/
+COPY contexts/team-registry/    ./contexts/team-registry/
+COPY contexts/result-ingestion/ ./contexts/result-ingestion/
+COPY contexts/notification/     ./contexts/notification/
 
-# Build — binario estático para la imagen final mínima
 WORKDIR /src/contexts/fixture-core
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
     go build -ldflags="-s -w -extldflags=-static" \
     -o /bin/fixture-core ./cmd/server/...
 
 # ── Stage 2: imagen final ─────────────────────────────────────────────────────
-FROM scratch
+# alpine en lugar de scratch — provee sh, wget y tzdata para el healthcheck
+FROM alpine:3.20
 
-# Certificados CA para conexiones TLS (PostgreSQL, NATS TLS)
-COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-# Zonas horarias para time.LoadLocation (horarios de partidos)
-COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
+RUN apk add --no-cache ca-certificates tzdata wget
 
 COPY --from=builder /bin/fixture-core /fixture-core
 

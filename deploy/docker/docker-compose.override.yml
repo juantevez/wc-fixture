@@ -1,0 +1,40 @@
+# =============================================================================
+# docker-compose.override.yml — overrides para desarrollo local
+# Se aplica automáticamente sobre docker-compose.yml al correr docker compose up
+# =============================================================================
+
+services:
+
+  # En desarrollo los servicios se reconstruyen con --watch
+  # y el LOG_LEVEL se fuerza a debug
+
+  fixture-core:
+    environment:
+      LOG_LEVEL: debug
+      ENV: development
+
+  venue-geo:
+    environment:
+      LOG_LEVEL: debug
+      ENV: development
+
+  team-registry:
+    environment:
+      LOG_LEVEL: debug
+      ENV: development
+
+  result-ingestion:
+    environment:
+      LOG_LEVEL: debug
+      ENV: development
+
+  notification:
+    environment:
+      LOG_LEVEL: debug
+      ENV: development
+
+  # En desarrollo exponer el puerto de monitoreo de NATS
+  nats:
+    ports:
+      - "4222:4222"
+      - "8222:8222"

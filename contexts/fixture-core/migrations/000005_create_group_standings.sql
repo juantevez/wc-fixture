@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS group_standings (
                                         ON DELETE CASCADE,
 
     -- Integridad: partidos jugados = won + drawn + lost
-    CONSTRAINT group_standings_played_check CHECK (played = won + drawn + lost),
+    CONSTRAINT group_standings_stats_check CHECK (played = won + drawn + lost),
 
     -- Posición única dentro del grupo
     CONSTRAINT group_standings_position_unique UNIQUE (group_id, position)

@@ -1,0 +1,189 @@
+# =============================================================================
+# docker-compose.yml — wc-fixture local development stack
+# Uso: cd deploy/docker && docker compose --env-file .env up --build
+# =============================================================================
+
+services:
+
+  # ── Infraestructura ─────────────────────────────────────────────────────────
+
+  postgres:
+    image: postgis/postgis:16-3.4
+    container_name: wc_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER:     ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB:       ${POSTGRES_DB}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ../postgres/init-db.sh:/docker-entrypoint-initdb.d/01-init-db.sh:ro
+      - ../../contexts/fixture-core/migrations:/migrations/fixture-core:ro
+      - ../../contexts/venue-geo/migrations:/migrations/venue-geo:ro
+      - ../../contexts/team-registry/migrations:/migrations/team-registry:ro
+      - ../../contexts/result-ingestion/migrations:/migrations/result-ingestion:ro
+    healthcheck:
+      # Verifica DOS cosas:
+      # 1. pg_isready con -h localhost — TCP disponible (no sólo Unix socket del init)
+      # 2. .init_complete — init-db.sh terminó de crear bases, extensiones y migraciones
+      test: ["CMD-SHELL", "pg_isready -h localhost -U $POSTGRES_USER -d $POSTGRES_DB && test -f /var/lib/postgresql/data/.init_complete"]
+      interval: 5s
+      timeout: 10s
+      retries: 20        # hasta 100s de espera — init-db.sh puede tardar
+      start_period: 15s
+
+  nats:
+    image: nats:2.10-alpine
+    container_name: wc_nats
+    restart: unless-stopped
+    command: ["-js", "-sd", "/data", "-m", "8222"]
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    volumes:
+      - natsdata:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8222/healthz || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  # ── Bounded Contexts ────────────────────────────────────────────────────────
+
+  fixture-core:
+    build:
+      context: ../..
+      dockerfile: contexts/fixture-core/Dockerfile
+    container_name: wc_fixture_core
+    restart: on-failure     # reintentar si falla al arrancar (postgres aún no listo)
+    ports:
+      - "8080:8080"
+    environment:
+      DATABASE_URL:   ${FIXTURE_DB_URL}
+      NATS_URL:       ${NATS_URL}
+      SERVER_PORT:    "8080"
+      LOG_LEVEL:      ${LOG_LEVEL}
+      ENV:            ${ENV}
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  venue-geo:
+    build:
+      context: ../..
+      dockerfile: contexts/venue-geo/Dockerfile
+    container_name: wc_venue_geo
+    restart: on-failure
+    ports:
+      - "8081:8081"
+    environment:
+      DATABASE_URL: ${VENUE_DB_URL}
+      SERVER_PORT:  "8081"
+      LOG_LEVEL:    ${LOG_LEVEL}
+      ENV:          ${ENV}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8081/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  team-registry:
+    build:
+      context: ../..
+      dockerfile: contexts/team-registry/Dockerfile
+    container_name: wc_team_registry
+    restart: on-failure
+    ports:
+      - "8082:8082"
+    environment:
+      DATABASE_URL: ${TEAM_DB_URL}
+      SERVER_PORT:  "8082"
+      LOG_LEVEL:    ${LOG_LEVEL}
+      ENV:          ${ENV}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8082/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  result-ingestion:
+    build:
+      context: ../..
+      dockerfile: contexts/result-ingestion/Dockerfile
+    container_name: wc_result_ingestion
+    restart: on-failure
+    ports:
+      - "8083:8083"
+    environment:
+      DATABASE_URL:   ${INGESTION_DB_URL}
+      NATS_URL:       ${NATS_URL}
+      SERVER_PORT:    "8083"
+      LOG_LEVEL:      ${LOG_LEVEL}
+      ENV:            ${ENV}
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+      fixture-core:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8083/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  notification:
+    build:
+      context: ../..
+      dockerfile: contexts/notification/Dockerfile
+    container_name: wc_notification
+    restart: on-failure
+    ports:
+      - "8084:8084"
+    environment:
+      NATS_URL:    ${NATS_URL}
+      SERVER_PORT: "8084"
+      LOG_LEVEL:   ${LOG_LEVEL}
+      ENV:         ${ENV}
+    depends_on:
+      nats:
+        condition: service_healthy
+      fixture-core:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8084/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+# ── Volúmenes ──────────────────────────────────────────────────────────────────
+
+volumes:
+  pgdata:
+    driver: local
+  natsdata:
+    driver: local

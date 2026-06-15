@@ -1,6 +1,7 @@
 package result
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -10,9 +11,9 @@ import (
 type IngestionSource string
 
 const (
-	SourceFIFAAPI  IngestionSource = "fifa_api"   // API oficial FIFA
-	SourceManual   IngestionSource = "manual"      // carga manual por operador
-	SourceWebhook  IngestionSource = "webhook"     // webhook de proveedor externo
+	SourceFIFAAPI IngestionSource = "fifa_api" // API oficial FIFA
+	SourceManual  IngestionSource = "manual"   // carga manual por operador
+	SourceWebhook IngestionSource = "webhook"  // webhook de proveedor externo
 )
 
 // IngestedResult representa un resultado de partido recibido y validado,
@@ -39,9 +40,9 @@ type IngestedResult struct {
 	HomeGoalsPen *int
 	AwayGoalsPen *int
 
-	CompletedAt  time.Time
-	IngestedAt   time.Time
-	Source       IngestionSource
+	CompletedAt    time.Time
+	IngestedAt     time.Time
+	Source         IngestionSource
 	IdempotencyKey string // hash del resultado para detectar duplicados
 }
 

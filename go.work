@@ -2,6 +2,7 @@ go 1.25
 
 use (
 	./contexts/fixture-core
+	./contexts/notification
 	./contexts/result-ingestion
 	./contexts/team-registry
 	./contexts/venue-geo
